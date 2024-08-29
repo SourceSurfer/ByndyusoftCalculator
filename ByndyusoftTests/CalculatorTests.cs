@@ -21,7 +21,7 @@ namespace Tests
         public void Setup()
         {
             calculator = new Calculator();
-            calculator.AddOperation("^", (a, b) => Math.Pow(a, b)); // Adding a custom operation
+            calculator.AddOperation("^", (a, b) => Math.Pow(a, b), 1);
         }
 
         [Test]

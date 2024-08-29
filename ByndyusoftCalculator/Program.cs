@@ -3,27 +3,49 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 
+using System;
+using System.Collections.Generic;
+using System.Linq;
+
 public class Calculator
 {
-    private Dictionary<string, Func<double, double, double>> operations;
+    private class Operation
+    {
+        public Func<double, double, double> Function { get; }
+        public int Priority { get; }
+
+        public Operation(Func<double, double, double> function, int priority)
+        {
+            Function = function;
+            Priority = priority;
+        }
+    }
+
+    private Dictionary<string, Operation> operations;
 
     public Calculator()
     {
-        operations = new Dictionary<string, Func<double, double, double>>
+        operations = new Dictionary<string, Operation>();
+        // Predefine some operations with their priorities
+        AddOperation("+", (a, b) => a + b, 1);
+        AddOperation("-", (a, b) => a - b, 1);
+        AddOperation("*", (a, b) => a * b, 2);
+        AddOperation("/", (a, b) =>
         {
-            { "+", (a, b) => a + b },
-            { "-", (a, b) => a - b },
-            { "*", (a, b) => a * b },
-            { "/", (a, b) => {
-                if (b == 0) throw new DivideByZeroException("Cannot divide by zero.");
-                return a / b;
-            }}
-        };
+            if (b == 0) throw new DivideByZeroException("Cannot divide by zero.");
+            return a / b;
+        }, 2);
     }
 
-    public void AddOperation(string symbol, Func<double, double, double> operation)
+    /// <summary>
+    /// Добавление операции
+    /// </summary>
+    /// <param name="symbol">Символ ' '</param>
+    /// <param name="operation">Операция (a,b)=>Math.</param>
+    /// <param name="priority">Приоритет 1,2,3</param>
+    public void AddOperation(string symbol, Func<double, double, double> operation, int priority)
     {
-        operations[symbol] = operation;
+        operations[symbol] = new Operation(operation, priority);
     }
 
     public double Evaluate(string expression)
@@ -39,9 +61,8 @@ public class Calculator
         var stack = new Stack<string>();
         int i = 0;
 
-        // Process unary operators at the beginning or after '(' or operators
         infix = infix.Replace(" ", "");
-        infix = HandleUnaryOperators(infix);
+        if (infix[0] == '-') infix = "0" + infix;
 
         while (i < infix.Length)
         {
@@ -54,28 +75,28 @@ public class Calculator
                 }
                 output.Add(number);
             }
-            else if (operations.ContainsKey(infix[i].ToString()) || infix[i] == '(' || infix[i] == ')')
+            else if (operations.ContainsKey(infix[i].ToString()))
             {
-                if (infix[i] == '(')
+                string currentOp = infix[i].ToString();
+                while (stack.Count > 0 && operations.ContainsKey(stack.Peek()) && operations[stack.Peek()].Priority >= operations[currentOp].Priority)
                 {
-                    stack.Push(infix[i].ToString());
+                    output.Add(stack.Pop());
                 }
-                else if (infix[i] == ')')
+                stack.Push(currentOp);
+                i++;
+            }
+            else if (infix[i] == '(')
+            {
+                stack.Push("(");
+                i++;
+            }
+            else if (infix[i] == ')')
+            {
+                while (stack.Peek() != "(")
                 {
-                    while (stack.Peek() != "(")
-                    {
-                        output.Add(stack.Pop());
-                    }
-                    stack.Pop(); // Remove '(' from the stack
+                    output.Add(stack.Pop());
                 }
-                else
-                {
-                    while (stack.Count > 0 && Priority(stack.Peek()) >= Priority(infix[i].ToString()))
-                    {
-                        output.Add(stack.Pop());
-                    }
-                    stack.Push(infix[i].ToString());
-                }
+                stack.Pop();
                 i++;
             }
         }
@@ -88,17 +109,6 @@ public class Calculator
         return output;
     }
 
-    private string HandleUnaryOperators(string expr)
-    {
-        if (expr.StartsWith("+") || expr.StartsWith("-"))
-        {
-            expr = "0" + expr; // Convert unary to binary by adding a "0" at the start
-        }
-        expr = expr.Replace("(-", "(0-");
-        expr = expr.Replace("(+", "(0+");
-        return expr;
-    }
-
     private double EvaluatePostfix(IEnumerable<string> postfix)
     {
         var stack = new Stack<double>();
@@ -108,23 +118,17 @@ public class Calculator
             {
                 stack.Push(value);
             }
-            else
+            else if (operations.ContainsKey(token))
             {
                 double right = stack.Pop();
                 double left = stack.Pop();
-                stack.Push(operations[token](left, right));
+                stack.Push(operations[token].Function(left, right));
             }
         }
         return stack.Pop();
     }
-
-    private int Priority(string op)
-    {
-        if (op == "+" || op == "-") return 1;
-        if (op == "*" || op == "/") return 2;
-        return 0;
-    }
 }
+
 
 class Program
 {
@@ -134,6 +138,8 @@ class Program
         Console.WriteLine("Введите выражение:");
         string input = Console.ReadLine();
         Calculator calc = new Calculator();
+        // calc.AddOperation("%",(a,b)=>Math.IEEERemainder(a,b), 2); приоритет 2, результат 5
+        // calc.AddOperation("%",(a,b)=>Math.IEEERemainder(a,b), 1); приоритет 1, результат 1
         double result = calc.Evaluate(input);
         Console.WriteLine($"Результат: {result}");
     }
